@@ -1,243 +1,407 @@
- import{useState,useRef,useEffect,useCallback}from"react";
-const NEWS_KEY="140c65c950fb4e9aa5058859445d80f3";
-const PROXY="https://corsproxy.io/?";
-const AI_ENDPOINT="/api/claude";
-const VISION_PROMPT=`You are AURUM — elite XAUUSD Gold chart analyst.
-Analyze the chart screenshot completely.
-
+import{useState,useRef,useEffect,useCallback}from"react";
+const NK="140c65c950fb4e9aa5058859445d80f3";
+const PX="https://corsproxy.io/?";
+const EP="/api/claude";
+const VP=`You are AURUM — elite XAUUSD Gold chart analyst. Analyze the chart screenshot completely.
 RESPOND IN THIS FORMAT:
-## 🔍 CHART READING
-**📐 TIMEFRAME:** [detected]
-**💰 PRICE:** [from chart]
-**📊 TREND:** [description]
-**🕯️ PATTERNS FOUND:**
-• [pattern 1]
-• [pattern 2]
-**🎯 KEY LEVELS:**
-• Resistance: [price]
-• Support: [price]
-**📈 INDICATORS:**
-• RSI: [value and meaning]
-• EMA: [position]
-**🧠 FULL ANALYSIS:**
-[3-4 sentences about what is happening]
-**🎯 TRADE SETUP:**
+## CHART READING
+**TIMEFRAME:** [detected]
+**PRICE:** [from chart]
+**TREND:** [description]
+**PATTERNS:**
+- [pattern 1]
+- [pattern 2]
+**KEY LEVELS:**
+- Resistance: [price]
+- Support: [price]
+**INDICATORS:**
+- RSI: [value and meaning]
+- EMA: [position]
+**ANALYSIS:** [3-4 sentences about what is happening]
+**TRADE SETUP:**
 Direction: [BUY/SELL/WAIT]
 Entry: [price]
 SL: [price] ([X] pips)
 TP1: [price] ([X] pips)
 TP2: [price] ([X] pips)
 RR: 1:[X]
-**⚡ CONFIDENCE:** [LOW/MEDIUM/HIGH/VERY HIGH] — [reason]
-**🚨 INVALIDATION:** [price]
-**💡 BEGINNER TIP:** [simple explanation]`;
+**CONFIDENCE:** [LOW/MEDIUM/HIGH/VERY HIGH] - [reason]
+**INVALIDATION:** [price]
+**TIP:** [simple explanation for beginner]`;
 
-const TEXT_PROMPT=`You are AURUM — elite AI trading analyst for XAUUSD Gold.
-Use live price and news when given. Give specific prices for entry/SL/TP.
+const TP=`You are AURUM — elite AI trading analyst for XAUUSD Gold.
+Use live price and news. Give specific prices for entry/SL/TP.
 RESPOND IN THIS FORMAT:
-## 🔮 AURUM ANALYSIS
-**📊 BIAS:** [BULLISH/BEARISH/NEUTRAL] — [reason]
-**📰 MACRO:**
-• [news 1]
-• [news 2]
-• [news 3]
-**📈 TECHNICALS:**
-• [point 1]
-• [point 2]
-• [point 3]
-**🎯 SETUP:**
+## AURUM ANALYSIS
+**BIAS:** [BULLISH/BEARISH/NEUTRAL] - [reason]
+**MACRO:**
+- [news 1]
+- [news 2]
+- [news 3]
+**TECHNICALS:**
+- [point 1]
+- [point 2]
+- [point 3]
+**SETUP:**
 Direction: [BUY/SELL/WAIT]
 Entry: [price]
 SL: [price] ([X] pips)
 TP1: [price] ([X] pips)
 TP2: [price] ([X] pips)
 RR: 1:[X]
-**⚡ CONFIDENCE:** [LOW/MEDIUM/HIGH/VERY HIGH] — [reason]
-**⏰ SESSION:** [Asian/London/New York]
-**🚨 INVALIDATION:** [price]
-**💡 ADVICE:** [1-2 sentences]`;
+**CONFIDENCE:** [LOW/MEDIUM/HIGH/VERY HIGH] - [reason]
+**SESSION:** [Asian/London/New York]
+**INVALIDATION:** [price]
+**ADVICE:** [1-2 sentences]`;
 
-const css=`
-@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&display=swap');
-*{box-sizing:border-box;margin:0;padding:0;}
-body,html{background:#06080d;min-height:100%;}
-.root{min-height:100vh;background:#06080d;font-family:'DM Mono',monospace;color:#e8d5a3;}
-.wrap{max-width:500px;margin:0 auto;padding-bottom:80px;}
-.hdr{padding:18px 16px 12px;text-align:center;border-bottom:1px solid rgba(212,175,55,.1);background:linear-gradient(180deg,rgba(212,175,55,.05),transparent);}
-.logo-row{display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:2px;}
-.gem{width:34px;height:34px;background:linear-gradient(135deg,#d4af37,#f5d06b,#9a6f1a);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 0 20px rgba(212,175,55,.4);}
-.logotxt{font-family:'Bebas Neue',sans-serif;font-size:36px;letter-spacing:8px;background:linear-gradient(135deg,#c9a227,#f0c84a);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
-.logsub{font-size:8px;color:rgba(212,175,55,.38);letter-spacing:3px;text-transform:uppercase;}
-.prow{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:8px;flex-wrap:wrap;}
-.pval{font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:2px;color:#d4af37;}
-.pchg{font-size:11px;padding:2px 9px;border-radius:20px;}
-.up{background:rgba(52,211,153,.1);color:#34d399;border:1px solid rgba(52,211,153,.2);}
-.dn{background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.2);}
-.fl{background:rgba(212,175,55,.08);color:#d4af37;border:1px solid rgba(212,175,55,.15);}
-.ldot{width:6px;height:6px;background:#34d399;border-radius:50%;animation:pulse 2s infinite;}
-@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.5;}}
-.chips{display:flex;justify-content:center;gap:8px;margin-top:5px;flex-wrap:wrap;}
-.chip{display:flex;align-items:center;gap:3px;font-size:8px;color:rgba(212,175,55,.3);letter-spacing:1px;text-transform:uppercase;}
-.cdot{width:4px;height:4px;border-radius:50%;}
-.cdot.ok{background:#34d399;}.cdot.err{background:#ef4444;}.cdot.sp{background:#d4af37;animation:pulse 1.5s infinite;}
-.rfbtn{margin-top:7px;background:none;border:1px solid rgba(212,175,55,.18);border-radius:7px;color:rgba(212,175,55,.38);font-size:8px;padding:4px 12px;cursor:pointer;letter-spacing:2px;font-family:'DM Mono',monospace;}
-.tabs{display:flex;margin:12px 12px 0;background:rgba(0,0,0,.3);border:1px solid rgba(212,175,55,.08);border-radius:11px;padding:3px;gap:2px;overflow-x:auto;}
-.tab{flex:1;min-width:48px;padding:8px 2px;border:none;background:none;color:rgba(212,175,55,.28);font-family:'DM Mono',monospace;font-size:8px;letter-spacing:1px;text-transform:uppercase;border-radius:8px;cursor:pointer;white-space:nowrap;}
-.tab.on{background:linear-gradient(135deg,rgba(212,175,55,.16),rgba(212,175,55,.06));color:#d4af37;border:1px solid rgba(212,175,55,.18);}
-.tab.von.on{background:linear-gradient(135deg,rgba(139,92,246,.18),rgba(139,92,246,.06));color:#a78bfa;border:1px solid rgba(139,92,246,.22);}
-.vwrap{margin:12px;}
-.vhero{background:linear-gradient(135deg,rgba(139,92,246,.08),rgba(212,175,55,.04));border:1px solid rgba(139,92,246,.18);border-radius:16px;padding:18px;text-align:center;margin-bottom:12px;}
-.vicon{font-size:38px;display:block;margin-bottom:6px;animation:float 3s ease-in-out infinite;}
-@keyframes float{0%,100%{transform:translateY(0);}50%{transform:translateY(-5px);}}
-.vtitle{font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:4px;background:linear-gradient(135deg,#a78bfa,#d4af37);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:4px;}
-.vsub{font-size:10px;color:rgba(212,175,55,.4);line-height:1.6;}
-.steps{background:rgba(255,255,255,.02);border:1px solid rgba(212,175,55,.07);border-radius:13px;padding:12px;margin-bottom:12px;}
-.sttl{font-size:8px;letter-spacing:3px;color:rgba(212,175,55,.3);text-transform:uppercase;margin-bottom:8px;}
-.step{display:flex;gap:9px;margin-bottom:8px;align-items:flex-start;}
-.step:last-child{margin-bottom:0;}
-.snum{width:22px;height:22px;min-width:22px;border-radius:50%;background:rgba(212,175,55,.12);border:1px solid rgba(212,175,55,.18);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:12px;color:#d4af37;}
-.stxt{font-size:11px;color:rgba(212,175,55,.45);line-height:1.5;padding-top:2px;}
-.stxt strong{color:#e0ccaa;}
-.ubtnrow{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;}
-.ubtn{position:relative;border-radius:14px;padding:20px 10px;text-align:center;cursor:pointer;border:none;display:block;overflow:hidden;}
-.ubtn input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;font-size:100px;}
-.ubtn.gal{background:linear-gradient(135deg,rgba(139,92,246,.14),rgba(139,92,246,.05));border:2px solid rgba(139,92,246,.28);}
-.ubtn.cam{background:linear-gradient(135deg,rgba(212,175,55,.11),rgba(212,175,55,.04));border:2px solid rgba(212,175,55,.22);}
-.ubtn:active{transform:scale(.97);}
-.ubtn-icon{font-size:30px;display:block;margin-bottom:6px;pointer-events:none;}
-.ubtn-lbl{font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:3px;display:block;margin-bottom:2px;pointer-events:none;}
-.ubtn.gal .ubtn-lbl{color:#a78bfa;}.ubtn.cam .ubtn-lbl{color:#d4af37;}
-.ubtn-sub{font-size:9px;letter-spacing:1px;display:block;pointer-events:none;}
-.ubtn.gal .ubtn-sub{color:rgba(139,92,246,.4);}.ubtn.cam .ubtn-sub{color:rgba(212,175,55,.3);}
-.or-row{display:flex;align-items:center;gap:8px;margin:2px 0 10px;}
-.or-line{flex:1;height:1px;background:rgba(212,175,55,.07);}
-.or-txt{font-size:9px;color:rgba(212,175,55,.22);letter-spacing:2px;}
-.ubtn-full{position:relative;width:100%;border-radius:12px;padding:14px;text-align:center;cursor:pointer;border:2px dashed rgba(212,175,55,.18);background:rgba(212,175,55,.03);display:block;overflow:hidden;}
-.ubtn-full input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;font-size:100px;}
-.ubtn-full-txt{font-size:10px;color:rgba(212,175,55,.3);letter-spacing:2px;pointer-events:none;}
-.prev{border:1px solid rgba(139,92,246,.2);border-radius:14px;overflow:hidden;margin-bottom:10px;background:#0a0c11;}
-.prev img{width:100%;display:block;max-height:280px;object-fit:contain;}
-.prev-bar{padding:9px 12px;background:rgba(139,92,246,.06);border-top:1px solid rgba(139,92,246,.1);display:flex;align-items:center;justify-content:space-between;gap:6px;}
-.prev-info{font-size:9px;color:rgba(139,92,246,.5);}
-.prev-btns{display:flex;gap:5px;}
-.prev-btn{border:none;border-radius:7px;padding:5px 11px;font-family:'DM Mono',monospace;font-size:9px;cursor:pointer;position:relative;overflow:hidden;}
-.prev-btn input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;font-size:100px;}
-.prev-btn.chg{background:rgba(212,175,55,.1);color:#d4af37;border:1px solid rgba(212,175,55,.18);}
-.prev-btn.rem{background:rgba(239,68,68,.08);color:#ef4444;border:1px solid rgba(239,68,68,.14);}
-.ctx{background:rgba(255,255,255,.02);border:1px solid rgba(212,175,55,.07);border-radius:12px;padding:11px;margin-bottom:10px;}
-.ctxt{font-size:8px;letter-spacing:3px;color:rgba(212,175,55,.28);text-transform:uppercase;margin-bottom:8px;}
-.cgrid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:7px;}
-.ilbl{font-size:8px;color:rgba(212,175,55,.25);letter-spacing:1px;text-transform:uppercase;margin-bottom:3px;}
-.inp{background:rgba(212,175,55,.04);border:1px solid rgba(212,175,55,.1);border-radius:7px;padding:7px 9px;color:#e8d5a3;font-family:'DM Mono',monospace;font-size:12px;width:100%;outline:none;}
-.inp::placeholder{color:rgba(212,175,55,.12);}
-.sel{background:rgba(212,175,55,.04);border:1px solid rgba(212,175,55,.1);border-radius:7px;padding:7px 9px;color:#e8d5a3;font-family:'DM Mono',monospace;font-size:11px;width:100%;outline:none;appearance:none;cursor:pointer;}
-.sel option{background:#0d1017;}
-.ta{background:rgba(212,175,55,.04);border:1px solid rgba(212,175,55,.1);border-radius:7px;padding:8px 10px;color:#e8d5a3;font-family:'DM Mono',monospace;font-size:11px;width:100%;outline:none;resize:none;min-height:52px;line-height:1.5;}
-.ta::placeholder{color:rgba(212,175,55,.12);}
-.vabtn{width:100%;padding:15px;background:linear-gradient(135deg,#7c3aed,#a78bfa,#5b21b6);border:none;border-radius:13px;color:#fff;font-family:'Bebas Neue',sans-serif;font-size:17px;letter-spacing:4px;cursor:pointer;position:relative;overflow:hidden;box-shadow:0 4px 20px rgba(139,92,246,.28);}
-.vabtn:disabled{opacity:.4;cursor:not-allowed;}
-.vabtn::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.14),transparent);transform:translateX(-100%);animation:shim 2.5s infinite;}
-@keyframes shim{100%{transform:translateX(100%);}}
-.lcard{border-radius:14px;padding:24px;text-align:center;margin-top:10px;}
-.lcard.vc{background:rgba(139,92,246,.02);border:1px solid rgba(139,92,246,.08);}
-.lcard.gc{background:rgba(212,175,55,.02);border:1px solid rgba(212,175,55,.07);margin:0 12px 12px;}
-.lorb{width:40px;height:40px;border-radius:50%;border:2px solid rgba(139,92,246,.08);border-top-color:#a78bfa;animation:spin .7s linear infinite;margin:0 auto 10px;}
-.lorb.g{border-color:rgba(212,175,55,.07);border-top-color:#d4af37;}
-@keyframes spin{100%{transform:rotate(360deg);}}
-.ltxt{font-size:10px;color:rgba(139,92,246,.45);letter-spacing:2px;text-transform:uppercase;animation:blink 1.5s infinite;}
-.ltxt.g{color:rgba(212,175,55,.4);}
-@keyframes blink{0%,100%{opacity:1;}50%{opacity:.25;}}
-.lprog{display:flex;flex-direction:column;gap:5px;margin-top:10px;}
-.lprow{display:flex;align-items:center;gap:7px;font-size:9px;color:rgba(139,92,246,.32);letter-spacing:1px;}
-.lprow.done{color:rgba(52,211,153,.55);}.lprow.act{color:#a78bfa;animation:blink 1s infinite;}
-.lpdot{width:5px;height:5px;border-radius:50%;background:rgba(139,92,246,.15);}
-.lprow.done .lpdot{background:#34d399;}.lprow.act .lpdot{background:#a78bfa;}
-.rcard{border-radius:14px;overflow:hidden;animation:slideup .3s ease;margin-top:10px;}
-.rcard.vc{border:1px solid rgba(139,92,246,.18);}
-.rcard.gc{border:1px solid rgba(212,175,55,.13);margin:0 12px 12px;}
-@keyframes slideup{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:translateY(0);}}
-.rhdr{padding:10px 13px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:5px;}
-.rhdr.vc{background:linear-gradient(90deg,rgba(139,92,246,.1),rgba(139,92,246,.02));border-bottom:1px solid rgba(139,92,246,.08);}
-.rhdr.gc{background:linear-gradient(90deg,rgba(212,175,55,.09),rgba(212,175,55,.02));border-bottom:1px solid rgba(212,175,55,.07);}
-.rtitle{font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:3px;}
-.rtitle.v{color:#a78bfa;}.rtitle.g{color:#d4af37;}
-.rhr{display:flex;align-items:center;gap:6px;}
-.rts{font-size:8px;letter-spacing:1px;}
-.rts.v{color:rgba(139,92,246,.38);}.rts.g{color:rgba(212,175,55,.26);}
-.svbtn{background:rgba(139,92,246,.1);border:1px solid rgba(139,92,246,.18);border-radius:6px;color:#a78bfa;font-family:'DM Mono',monospace;font-size:8px;padding:3px 8px;cursor:pointer;}
-.svbtn.g{background:rgba(212,175,55,.08);border-color:rgba(212,175,55,.18);color:#d4af37;}
-.rbody{padding:12px;font-size:11.5px;line-height:1.75;color:#d4c584;}
-.rbody strong{color:#f0e0a0;}
-.rbody .mh{font-family:'Bebas Neue',sans-serif;font-size:13px;color:#a78bfa;margin:9px 0 4px;letter-spacing:1px;}
-.rbody.g .mh{color:#d4af37;}
-.rbody ul{padding-left:12px;margin:2px 0;}
-.rbody li{margin-bottom:2px;}
-.appsec{background:rgba(52,211,153,.03);border:1px solid rgba(52,211,153,.1);border-radius:13px;padding:12px;margin-top:10px;}
-.apptitle{font-size:8px;letter-spacing:3px;color:rgba(52,211,153,.4);text-transform:uppercase;margin-bottom:8px;}
-.appgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:8px;}
-.apf{background:rgba(0,0,0,.25);border:1px solid rgba(52,211,153,.07);border-radius:7px;padding:7px;text-align:center;}
-.apfl{font-size:8px;color:rgba(52,211,153,.35);letter-spacing:1px;text-transform:uppercase;margin-bottom:2px;}
-.apfv{font-size:13px;font-family:'Bebas Neue',sans-serif;letter-spacing:1px;}
-.apfv.e{color:#e8d5a3;}.apfv.s{color:#ef4444;}.apfv.t{color:#34d399;}
-.appbtn{width:100%;padding:13px;border:none;border-radius:9px;font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:4px;cursor:pointer;}
-.appbtn.buy{background:linear-gradient(135deg,#34d399,#059669);color:#06080d;box-shadow:0 4px 12px rgba(52,211,153,.2);}
-.appbtn.sell{background:linear-gradient(135deg,#ef4444,#b91c1c);color:#fff;box-shadow:0 4px 12px rgba(239,68,68,.2);}
-.appbtn.wait{background:rgba(212,175,55,.07);border:1px solid rgba(212,175,55,.14);color:#d4af37;}
-.appbtn:disabled{opacity:.35;cursor:not-allowed;}
-.fcard{margin:12px;background:rgba(255,255,255,.015);border:1px solid rgba(212,175,55,.08);border-radius:15px;overflow:hidden;}
-.fsec{padding:11px;border-bottom:1px solid rgba(212,175,55,.05);}
-.fsec:last-child{border-bottom:none;}
-.slbl{font-size:8px;letter-spacing:3px;color:rgba(212,175,55,.3);text-transform:uppercase;margin-bottom:7px;}
-.igrid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
-.iwrap{display:flex;flex-direction:column;gap:3px;}
-.bias-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;}
-.bbtn{padding:8px 4px;border:1px solid rgba(212,175,55,.1);border-radius:7px;background:rgba(212,175,55,.02);color:rgba(212,175,55,.25);font-family:'DM Mono',monospace;font-size:9px;cursor:pointer;text-align:center;}
-.bbtn.bull.on{background:rgba(52,211,153,.08);border-color:rgba(52,211,153,.25);color:#34d399;}
-.bbtn.bear.on{background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.25);color:#ef4444;}
-.bbtn.neut.on{background:rgba(212,175,55,.08);border-color:rgba(212,175,55,.25);color:#d4af37;}
-.abtn{margin:12px;width:calc(100% - 24px);padding:14px;background:linear-gradient(135deg,#d4af37,#f0c84a,#9a6f1a);border:none;border-radius:11px;color:#06080d;font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:4px;cursor:pointer;position:relative;overflow:hidden;box-shadow:0 4px 18px rgba(212,175,55,.2);}
-.abtn:disabled{opacity:.4;cursor:not-allowed;}
-.abtn::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.15),transparent);transform:translateX(-100%);animation:shim 2.5s infinite;}
-.sigcard{margin:0 12px 12px;border:1px solid rgba(212,175,55,.12);border-radius:14px;overflow:hidden;animation:slideup .3s ease;}
-.sighdr{padding:10px 13px;background:linear-gradient(90deg,rgba(212,175,55,.08),rgba(212,175,55,.02));border-bottom:1px solid rgba(212,175,55,.07);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:5px;}
-.sigtitle{font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:3px;color:#d4af37;}
-.sigbody{padding:12px;font-size:11.5px;line-height:1.75;color:#d4c584;}
-.sigbody strong{color:#f0e0a0;}
-.sigbody .mh{font-family:'Bebas Neue',sans-serif;font-size:13px;color:#d4af37;margin:9px 0 4px;letter-spacing:1px;}
-.sigbody ul{padding-left:12px;margin:2px 0;}
-.sigbody li{margin-bottom:2px;}
-.sig-app{margin:0 12px 12px;}
-.statsrow{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:12px;}
-.sbox{background:rgba(255,255,255,.02);border:1px solid rgba(212,175,55,.07);border-radius:11px;padding:9px 5px;text-align:center;}
-.sval{font-family:'Bebas Neue',sans-serif;font-size:20px;}
-.sval.g{color:#34d399;}.sval.r{color:#ef4444;}.sval.gl{color:#d4af37;}
-.slbll{font-size:8px;color:rgba(212,175,55,.26);letter-spacing:1px;text-transform:uppercase;margin-top:1px;}
-.jtitle{margin:10px 12px 4px;font-size:8px;letter-spacing:3px;color:rgba(212,175,55,.3);text-transform:uppercase;}
-.titem{margin:0 12px 7px;background:rgba(255,255,255,.02);border:1px solid rgba(212,175,55,.07);border-radius:11px;padding:11px;position:relative;overflow:hidden;}
-.titem::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;}
-.titem.open::before{background:#d4af37;}.titem.win::before{background:#34d399;}.titem.loss::before{background:#ef4444;}.titem.be::before{background:#64748b;}
-.ttop{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;}
-.tdir{font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:2px;}
-.tdir.BUY{color:#34d399;}.tdir.SELL{color:#ef4444;}
-.tstat{font-size:8px;padding:2px 7px;border-radius:9px;letter-spacing:1px;}
-.tstat.open{background:rgba(212,175,55,.1);color:#d4af37;}.tstat.win{background:rgba(52,211,153,.1);color:#34d399;}.tstat.loss{background:rgba(239,68,68,.1);color:#ef4444;}.tstat.be{background:rgba(100,116,139,.1);color:#94a3b8;}
-.tgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-bottom:4px;}
-.tfl{font-size:8px;color:rgba(212,175,55,.24);letter-spacing:1px;text-transform:uppercase;}
-.tfv{font-size:12px;color:#e8d5a3;}
-.tpnl{font-family:'Bebas Neue',sans-serif;font-size:19px;letter-spacing:1px;}
-.tpnl.pos{color:#34d399;}.tpnl.neg{color:#ef4444;}.tpnl.ze{color:#64748b;}
-.cbtns{display:flex;gap:4px;margin-top:7px;}
-.cbtn2{flex:1;padding:6px;border:none;border-radius:6px;font-family:'DM Mono',monospace;font-size:8px;cursor:pointer;}
-.cbtn2.w{background:rgba(52,211,153,.1);color:#34d399;border:1px solid rgba(52,211,153,.15);}
-.cbtn2.l{background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.15);}
-.cbtn2.b{background:rgba(100,116,139,.08);color:#94a3b8;border:1px solid rgba(100,116,139,.12);}
-.empty{text-align:center;padding:28px;color:rgba(212,175,55,.15);font-size:11px;}
-.ncard{margin:10px 12px;background:rgba(255,255,255,.015);border:1px solid rgba(212,175,55,.07);border-radius:13px;padding:11px;}
-.ntitle{font-size:8px;letter-spacing:2px;color:rgba(212,175,55,.3);text-transform:uppercase;margin-bottom:7px;}
-.nitem{padding:7px 0;border-bottom:1px solid rgba(212,175,55,.05);}
-.nitem:last-child{border-bottom:none;}
-.nbadge{display:inline-block;font-size:8px;padding:2px 6px;border-radius:9px;letter-spacing:1px;margin-bottom:2px;}
-.nbadge.high{background:rgba(239,68,68,.1);color:#ef4444;}.nbadge.medium{background:rgba(251,191,36,.1);color:#fbbf24;}.nbadge.forex{background:rgba(139,92,246,.1);color:#a78bfa;}
-.nhead{font-size:11px;color:#ddc89a;line-height:1.4;}
-.nnote{font-size:9px;color:rgba(212,175,55,.24);margin-top:1px;}
-.nload{text-align:ce
+function md(t){if(!t)return"";return t.replace(/^## (.+)$/gm,"<b>$1</b><br/>").replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>").replace(/^[-•] (.+)$/gm,"<li>$1</li>").replace(/(<li>[\s\S]*?<\/li>)/g,"<ul>$1</ul>").replace(/\n/g,"<br/>");}
+function dl(text,name){const a=Object.assign(document.createElement("a"),{href:URL.createObjectURL(new Blob([text],{type:"text/plain"})),download:name});a.click();}
+function sig(t){return{dir:t.match(/Direction:\s*(BUY|SELL|WAIT)/)?.[1]||"WAIT",entry:t.match(/Entry:\s*([\d.]+)/)?.[1]||null,sl:t.match(/SL:\s*([\d.]+)/)?.[1]||null,tp1:t.match(/TP1:\s*([\d.]+)/)?.[1]||null,tp2:t.match(/TP2:\s*([\d.]+)/)?.[1]||null,rr:t.match(/RR:\s*1:([\d.]+)/)?.[1]||null};}
+function b64(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.onerror=rej;r.readAsDataURL(file);});}
+async function ai(body){const r=await fetch(EP,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});const d=await r.json();return d.content?.map(b=>b.text||"").join("")||"No response.";}
+
+function Approve({p,onApprove}){
+  if(!p)return null;
+  return(
+    <div className="appsec">
+      <div className="apptitle">PAPER TRADE - ONE TAP</div>
+      <div className="appgrid">
+        <div className="apf"><div className="apfl">Entry</div><div className="apfv e">{p.entry||"—"}</div></div>
+        <div className="apf"><div className="apfl">SL</div><div className="apfv s">{p.sl||"—"}</div></div>
+        <div className="apf"><div className="apfl">TP2</div><div className="apfv t">{p.tp2||"—"}</div></div>
+      </div>
+      <button className={"appbtn "+(p.dir==="BUY"?"buy":p.dir==="SELL"?"sell":"wait")} onClick={onApprove} disabled={p.dir==="WAIT"}>
+        {p.dir==="WAIT"?"WAIT - NO SETUP":"APPROVE "+p.dir+" TRADE"}
+      </button>
+    </div>
+  );
+}
+
+export default function Aurum(){
+  const[tab,setTab]=useState("vision");
+  const[price,setPrice]=useState(null);
+  const[prev,setPrev]=useState(null);
+  const[ps,setPs]=useState("sp");
+  const[news,setNews]=useState([]);
+  const[ns,setNs]=useState("sp");
+  const[imgB64,setImgB64]=useState(null);
+  const[imgMime,setImgMime]=useState("image/png");
+  const[previewUrl,setPreview]=useState(null);
+  const[imgSize,setImgSize]=useState(0);
+  const[vCtx,setVCtx]=useState({session:"",notes:""});
+  const[vLoad,setVLoad]=useState(false);
+  const[vStep,setVStep]=useState(0);
+  const[vResult,setVResult]=useState(null);
+  const[vParsed,setVParsed]=useState(null);
+  const[form,setForm]=useState({trend:"",pattern:"",keyLevel:"",rsi:"",session:"",bias:"",notes:""});
+  const[loading,setLoading]=useState(false);
+  const[signal,setSignal]=useState(null);
+  const[parsed,setParsed]=useState(null);
+  const[trades,setTrades]=useState([]);
+  const[msgs,setMsgs]=useState([{role:"ai",text:"Hello! I am AURUM.\nTap VISION tab, tap GALLERY, pick your XAUUSD chart screenshot, then tap ANALYZE!"}]);
+  const[chatIn,setChatIn]=useState("");
+  const[chatLoad,setChatLoad]=useState(false);
+  const chatEnd=useRef(null);
+
+  const fetchPrice=useCallback(async()=>{
+    setPs("sp");
+    try{
+      const r=await fetch(PX+"https://query1.finance.yahoo.com/v8/finance/chart/GC%3DF?interval=1m&range=1d");
+      const d=await r.json();
+      const m=d?.chart?.result?.[0]?.meta;
+      if(m?.regularMarketPrice){setPrice(m.regularMarketPrice.toFixed(2));setPrev(m.previousClose?.toFixed(2));setPs("ok");}
+      else throw new Error();
+    }catch{setPs("err");}
+  },[]);
+
+  const fetchNews=useCallback(async()=>{
+    setNs("sp");
+    try{
+      const r=await fetch(PX+"https://newsapi.org/v2/everything?q=gold+XAUUSD+fed&language=en&sortBy=publishedAt&pageSize=8&apiKey="+NK);
+      const d=await r.json();
+      if(d.articles?.length){setNews(d.articles.slice(0,8));setNs("ok");return;}
+      throw new Error();
+    }catch{setNs("err");}
+  },[]);
+
+  useEffect(()=>{fetchPrice();fetchNews();},[]);
+  useEffect(()=>{chatEnd.current?.scrollIntoView({behavior:"smooth"});},[msgs]);
+
+  const chg=price&&prev?(parseFloat(price)-parseFloat(prev)).toFixed(2):null;
+  const pct=price&&prev?(((parseFloat(price)-parseFloat(prev))/parseFloat(prev))*100).toFixed(2):null;
+  const pdir=chg>0?"up":chg<0?"dn":"fl";
+
+  const handleFile=async(file)=>{
+    if(!file||!file.type.startsWith("image/"))return;
+    setImgMime(file.type);setImgSize(file.size);
+    setPreview(URL.createObjectURL(file));
+    const x=await b64(file);
+    setImgB64(x);setVResult(null);setVParsed(null);
+  };
+  const onFC=(e)=>{const f=e.target.files?.[0];if(f)handleFile(f);e.target.value="";};
+
+  const runVision=async()=>{
+    if(!imgB64)return;
+    setVLoad(true);setVResult(null);setVParsed(null);setVStep(1);
+    const nc=news.length?"\n\nLIVE NEWS:\n"+news.slice(0,3).map(n=>"- "+n.title).join("\n"):"";
+    const pc=price?"\n\nLIVE XAUUSD: $"+price:"";
+    const ec=[vCtx.session&&"Session: "+vCtx.session,vCtx.notes&&"Notes: "+vCtx.notes].filter(Boolean).join("\n");
+    setTimeout(()=>setVStep(2),1500);setTimeout(()=>setVStep(3),3000);
+    try{
+      const text=await ai({
+        model:"claude-sonnet-4-20250514",max_tokens:1200,system:VP,
+        messages:[{role:"user",content:[
+          {type:"image",source:{type:"base64",media_type:imgMime,data:imgB64}},
+          {type:"text",text:"Analyze this XAUUSD chart."+pc+nc+(ec?"\n\n"+ec:"")}
+        ]}]
+      });
+      setVResult({text,ts:new Date().toLocaleTimeString(),date:new Date().toLocaleDateString(),price:price||"—"});
+      setVParsed(sig(text));
+    }catch(e){setVResult({text:"Error: "+e.message,ts:new Date().toLocaleTimeString(),price:"—"});}
+    setVLoad(false);setVStep(0);
+  };
+
+  const runAnalysis=async()=>{
+    setLoading(true);setSignal(null);setParsed(null);
+    const parts=[];
+    if(price)parts.push("LIVE XAUUSD: $"+price);
+    if(news.length)parts.push("NEWS:\n"+news.slice(0,3).map(n=>"- "+n.title).join("\n"));
+    if(form.trend)parts.push("Trend: "+form.trend);
+    if(form.bias)parts.push("Bias: "+form.bias);
+    if(form.pattern)parts.push("Pattern: "+form.pattern);
+    if(form.keyLevel)parts.push("Key Level: "+form.keyLevel);
+    if(form.rsi)parts.push("RSI: "+form.rsi);
+    if(form.session)parts.push("Session: "+form.session);
+    if(form.notes)parts.push("Notes: "+form.notes);
+    try{
+      const text=await ai({model:"claude-sonnet-4-20250514",max_tokens:1000,system:TP,messages:[{role:"user",content:parts.join("\n\n")||"Full XAUUSD analysis."}]});
+      setSignal({text,ts:new Date().toLocaleTimeString(),date:new Date().toLocaleDateString(),price:price||"—"});
+      setParsed(sig(text));
+    }catch{setSignal({text:"Connection error.",ts:"",price:"—"});}
+    setLoading(false);
+  };
+
+  const approveTrade=(p,src)=>{
+    if(!p||p.dir==="WAIT")return;
+    setTrades(t=>[{id:Date.now(),...p,src,openAt:new Date().toLocaleTimeString(),openDate:new Date().toLocaleDateString(),status:"open",pips:null},...t]);
+    setTab("journal");
+  };
+
+  const closeTrade=(id,outcome)=>setTrades(t=>t.map(tr=>{
+    if(tr.id!==id)return tr;
+    let pips=0;
+    if(outcome==="win"&&tr.tp2&&tr.entry)pips=tr.dir==="BUY"?Math.round((parseFloat(tr.tp2)-parseFloat(tr.entry))*10):Math.round((parseFloat(tr.entry)-parseFloat(tr.tp2))*10);
+    if(outcome==="loss"&&tr.sl&&tr.entry)pips=tr.dir==="BUY"?Math.round((parseFloat(tr.sl)-parseFloat(tr.entry))*10):Math.round((parseFloat(tr.entry)-parseFloat(tr.sl))*10);
+    return{...tr,status:outcome,pips,closeAt:new Date().toLocaleTimeString()};
+  }));
+
+  const closed=trades.filter(t=>t.status!=="open");
+  const wins=trades.filter(t=>t.status==="win").length;
+  const losses=trades.filter(t=>t.status==="loss").length;
+  const winRate=closed.length?Math.round((wins/closed.length)*100):0;
+  const totPips=trades.reduce((s,t)=>s+(t.pips||0),0);
+
+  const sendChat=async()=>{
+    if(!chatIn.trim()||chatLoad)return;
+    const msg=chatIn.trim();setChatIn("");setChatLoad(true);
+    setMsgs(m=>[...m,{role:"user",text:msg}]);
+    try{
+      const hist=msgs.map(m=>({role:m.role==="ai"?"assistant":"user",content:m.text}));
+      const ctx=price?"XAUUSD=$"+price:"";
+      const text=await ai({model:"claude-sonnet-4-20250514",max_tokens:800,system:TP+"\n\nLIVE:"+ctx+"\nBe concise.",messages:[...hist,{role:"user",content:msg}]});
+      setMsgs(m=>[...m,{role:"ai",text}]);
+    }catch{setMsgs(m=>[...m,{role:"ai",text:"Error."}]);}
+    setChatLoad(false);
+  };
+
+  const impactOf=n=>{const t=(n.title||"").toLowerCase();if(["fed","fomc","nfp","cpi","war","rate"].some(k=>t.includes(k)))return"high";if(["gold","xau","dollar","yield","inflation"].some(k=>t.includes(k)))return"medium";return"forex";};
+  const STEPS=["Uploading chart...","Reading patterns...","Calculating signal..."];
+
+  return(
+    <div className="root">
+      <div className="wrap">
+
+        <div className="hdr">
+          <div className="logo-row">
+            <div className="gem">&#x26DC;</div>
+            <div className="logotxt">AURUM</div>
+          </div>
+          <div className="logsub">AI Gold Analyst · Vision · XAUUSD</div>
+          <div className="prow">
+            {ps==="sp"&&<span style={{fontSize:10,color:"rgba(212,175,55,.28)"}}>LOADING...</span>}
+            {ps==="ok"&&<>
+              <div className="pval">$ {price}</div>
+              {chg&&<div className={"pchg "+pdir}>{chg>0?"+":""}{chg} ({pct}%)</div>}
+              <div style={{display:"flex",alignItems:"center",gap:4,fontSize:9,color:"rgba(52,211,153,.55)",letterSpacing:2}}>
+                <div className="ldot"/>LIVE
+              </div>
+            </>}
+            {ps==="err"&&<span style={{fontSize:10,color:"rgba(239,68,68,.4)"}}>Manual mode</span>}
+          </div>
+          <div className="chips">
+            <div className="chip"><div className={"cdot "+(ps==="ok"?"ok":"err")}/>Yahoo</div>
+            <div className="chip"><div className={"cdot "+(ns==="ok"?"ok":"err")}/>News</div>
+            <div className="chip"><div className="cdot ok"/>Claude</div>
+          </div>
+          <button className="rfbtn" onClick={()=>{fetchPrice();fetchNews();}}>REFRESH</button>
+        </div>
+
+        <div className="tabs">
+          {[["vision","VISION","von"],["analyze","ANALYZE",""],["journal","JOURNAL",""],["news","NEWS",""],["chat","CHAT",""]].map(([id,lbl,ex])=>(
+            <button key={id} className={"tab "+(ex||"")+" "+(tab===id?"on":"")} onClick={()=>setTab(id)}>{lbl}</button>
+          ))}
+        </div>
+
+        {tab==="vision"&&(
+          <div className="vwrap">
+            <div className="vhero">
+              <span className="vicon">&#128065;</span>
+              <div className="vtitle">AURUM VISION</div>
+              <div className="vsub">Upload your XAUUSD chart screenshot. AURUM reads every pattern, RSI, levels and gives Entry, SL, TP automatically.</div>
+            </div>
+
+            {!previewUrl&&(
+              <div>
+                <div className="steps">
+                  <div className="sttl">HOW TO USE</div>
+                  {[["1","Open TradingView, search XAUUSD, set H1 or H4"],["2","Add RSI indicator and take a screenshot"],["3","Tap GALLERY below and select the screenshot"],["4","Tap ANALYZE and get your complete signal"]].map(([n,t])=>(
+                    <div key={n} className="step"><div className="snum">{n}</div><div className="stxt">{t}</div></div>
+                  ))}
+                </div>
+                <div className="ubtnrow">
+                  <label className="ubtn gal">
+                    <input type="file" accept="image/*" onChange={onFC}/>
+                    <span className="ubtn-icon">&#128444;</span>
+                    <span className="ubtn-lbl">GALLERY</span>
+                    <span className="ubtn-sub">Pick screenshot</span>
+                  </label>
+                  <label className="ubtn cam">
+                    <input type="file" accept="image/*" capture="environment" onChange={onFC}/>
+                    <span className="ubtn-icon">&#128247;</span>
+                    <span className="ubtn-lbl">CAMERA</span>
+                    <span className="ubtn-sub">Take live photo</span>
+                  </label>
+                </div>
+                <div className="or-row"><div className="or-line"/><div className="or-txt">OR</div><div className="or-line"/></div>
+                <label className="ubtn-full">
+                  <input type="file" accept="image/*" onChange={onFC}/>
+                  <div className="ubtn-full-txt">BROWSE ANY IMAGE FILE</div>
+                </label>
+              </div>
+            )}
+
+            {previewUrl&&(
+              <div>
+                <div className="prev">
+                  <img src={previewUrl} alt="Chart"/>
+                  <div className="prev-bar">
+                    <div className="prev-info">Ready - {(imgSize/1024).toFixed(0)}KB</div>
+                    <div className="prev-btns">
+                      <label className="prev-btn chg"><input type="file" accept="image/*" onChange={onFC}/>Change</label>
+                      <button className="prev-btn rem" onClick={()=>{setPreview(null);setImgB64(null);setVResult(null);setVParsed(null);}}>Remove</button>
+                    </div>
+                  </div>
+                </div>
+                <div className="ctx">
+                  <div className="ctxt">Context (Optional)</div>
+                  <div className="cgrid">
+                    <div>
+                      <div className="ilbl">Session</div>
+                      <select className="sel" value={vCtx.session} onChange={e=>setVCtx(v=>({...v,session:e.target.value}))}>
+                        <option value="">Select...</option>
+                        {["Asian","London","New York"].map(s=><option key={s}>{s}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <div className="ilbl">Price</div>
+                      <input className="inp" value={price||""} readOnly style={{opacity:.5}}/>
+                    </div>
+                  </div>
+                  <div className="ilbl" style={{marginBottom:3}}>Notes</div>
+                  <textarea className="ta" placeholder="Anything extra..." value={vCtx.notes} onChange={e=>setVCtx(v=>({...v,notes:e.target.value}))}/>
+                </div>
+                <button className="vabtn" onClick={runVision} disabled={vLoad||!imgB64}>
+                  {vLoad?"READING CHART...":"ANALYZE MY CHART"}
+                </button>
+              </div>
+            )}
+
+            {vLoad&&(
+              <div className="lcard vc">
+                <div className="lorb"/>
+                <div className="ltxt">AURUM READING</div>
+                <div className="lprog">
+                  {STEPS.map((s,i)=>(
+                    <div key={i} className={"lprow "+(vStep>i+1?"done":vStep===i+1?"act":"")}>
+                      <div className="lpdot"/>{s}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {vResult&&!vLoad&&(
+              <div>
+                <div className="rcard vc">
+                  <div className="rhdr vc">
+                    <div>
+                      <div style={{fontSize:8,color:"rgba(139,92,246,.38)",marginBottom:2}}>VISION - {vResult.date}</div>
+                      <div className="rtitle v">AURUM READING</div>
+                    </div>
+                    <div className="rhr">
+                      <div className="rts v">{vResult.ts}</div>
+                      <button className="svbtn" onClick={()=>dl(vResult.text,"AURUM-Vision.txt")}>SAVE</button>
+                    </div>
+                  </div>
+                  <div className="rbody" dangerouslySetInnerHTML={{__html:md(vResult.text)}}/>
+                </div>
+                <Approve p={vParsed} onApprove={()=>approveTrade(vParsed,"vision")}/>
+              </div>
+            )}
+
+            <div className="disc">Paper trading only. Educational tool. Never risk real money without experience.</div>
+          </div>
+        )}
+
+        {tab==="analyze"&&(
+          <div>
+            <div className="fcard">
+              <div className="fsec">
+                <div className="slbl">Market Data</div>
+                <div className="igrid">
+                  <div className="iwrap"><div className="ilbl">S/R Level</div><input className="inp" placeholder="3020.00" value={form.keyLevel} onChange={e=>setForm(f=>({...f,keyLevel:e.target.value}))}/></div>
+                  <div className="iwrap"><div className="ilbl">RSI</div><input className="inp" placeholder="65" value={form.rsi} onChange={e=>setForm(f=>({...f,rsi:e.target.value}))}/></div>
+                  <div className="iwrap">
+                    <div className="ilbl">Trend</div>
+                    <select className="sel" value={form.trend} onChange={e=>setForm(f=>({...f,trend:e.target.value}))}>
+                      <option value="">Select...</option>
+                      {["Uptrend","Downtrend","Ranging"].map(s=><option key={s}>{s}</option>)}
+                    </select>
+                  </div>
+                  <div className="iwrap">
+                    <div className="ilbl">Session</div>
+                    <select className="sel" value={form.session} onChange={e=>setForm(f=>({...f,session:e.target.value}))}>
+                      <option value="">Select...</option>
+                      {["Asian","London","New York"].map(s=><option key={s}>{s}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </div>
+              <div className="fsec">
+                <div className="slbl">Bias</div>
+                <div className="bias-row">
+                  {[["bull","BULL","bullish"],["neut","NEUT","neutral"],["bear","BEAR","bearish"]].map(([c,l,v])=>(
+                    <button key={v} className={"bbtn "+c+" "+(form.bias===v?"on":"")} onClick={()=>setForm(f=>({...f,bias:f.bias===v?"":v}))}>{l}</button>
+                  ))}
+                </div>
+              </div>
+              <div className="fsec">
+                <div className="slbl">Notes</div>
+                <textarea className="ta" value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))} placeholder="What you see on chart..."/>
+              </div>
+            </div>
+            <button className="abtn" onClick={runAnalysis} disabled={loading}>{loading?"ANALYSING...":"RUN ANALYSIS"}</button>
+            {loading&&<div className="lcard gc"><div className="lorb g"/><div className="ltxt g">Reading...</div></div>}
+            {signal&&!loading&&(
+              <div>
+                <div c
